@@ -5,8 +5,12 @@
 const byte sensors_size = 6;
 int sensorsPin[sensors_size] = {2,3,4,5,6,7}; //4 left elements is terminal, 2 right elements is wire {2,3,4,5,6,7} BOARD MOI || {5,4,3,2,6,7} BOARD CU 
 //Terminal4_Terminal3_Terminal2_Terminal1_Wire2_Wire1
+int sensorsState[sensors_size];
+byte lastSensorState[sensors_size];
 
-//String chuoi[sensors_size] = {'0','0','0','0','0','1'};           // lưu tín hiệu đến
+unsigned long lastTimeSensorStateChanged[sensors_size] = {millis(),millis(),millis(),millis(),millis(),millis()};
+unsigned long debounceDuration[sensors_size] = {5000,5000,5000,5000,5000,5000}; //millis
+
 String chuoi = "000001";
 String inputString = "";         // a string to hold incoming data
 boolean stringComplete = false;  // whether the string is complete
@@ -14,13 +18,18 @@ boolean stringComplete = false;  // whether the string is complete
 void setup()
 {
   inputString.reserve(200);
-//  pinMode(sensor1, INPUT_PULLUP);
-//  pinMode(sensor2, INPUT_PULLUP);
+
+  Serial.begin(9600);     // mở cổng serial với mức baudrate là 9600
+  //Serial.println(digitalRead(sensorsPin[5]));
   for(int i = 0; i < sensors_size; i++){
       pinMode(sensorsPin[i], INPUT_PULLUP);    
   }
   pinMode(led1, OUTPUT);
-  Serial.begin(9600);     // mở cổng serial với mức baudrate là 9600
+  
+  for (int i = 0; i < sensors_size; i++)
+  {
+    lastSensorState[i] = digitalRead(sensorsPin[i]);
+  }
   chuoi = readEEPROM(20, 6);
   if (chuoi.length() > 6) {
     chuoi = "000001";//set default
@@ -31,7 +40,34 @@ void setup()
 void loop()
 {
   for(int i = 0; i < sensors_size; i++){
-      chuoi[i] = digitalRead(sensorsPin[i]) == HIGH ? '0' : '1'; //read signal of wire and terminal
+    sensorsState[i] = digitalRead(sensorsPin[i]);
+    if(sensorsState[i] != lastSensorState[i]){
+      lastTimeSensorStateChanged[i] = millis();
+      //----------------------------------------------------------------------------------
+      //----------------- CHECK SENSOR STATUS --------------------------------------------
+      //----------------------------------------------------------------------------------
+      while(1){
+        //Serial.println((String)lastTimeSensorStateChanged[i] + " -- Start sensor:" + i);
+        if(digitalRead(sensorsPin[i]) == LOW){
+          //Serial.println("Thoat");
+          sensorsState[i] = 0;
+          break;
+        }
+        else{
+          sensorsState[i] = 1;
+        }
+        //Serial.println((String)millis() + " -- sensor:" + i);
+        if((unsigned long)(millis() - lastTimeSensorStateChanged[i]) > debounceDuration[i]){
+          //Serial.println("Stop --- " + (String)millis());
+          break;
+        } 
+      }
+      //----------------------------------------------------------------------------------
+      //----------------------------------------------------------------------------------
+      //----------------------------------------------------------------------------------
+      lastSensorState[i] = sensorsState[i];
+    }
+    chuoi[i] = lastSensorState[i] == HIGH ? '0' : '1'; //read signal of wire and terminal
   }
   
   if (stringComplete)
